@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { supabase } from "./lib/supabase";
 import {
   Calendar, Bell, Star, Cake, Newspaper, Trophy, Info, Lock, Search,
   HelpCircle, Heart, Sun, Moon, Menu, X, Plus, Pencil, Trash2, Pin,
@@ -335,7 +336,7 @@ function to24h(t) {
 }
 
 function CountdownCard({ nextEvent, t }) {
-  const remaining = useCountdown(nextEvent?.date, nextEvent?.time);
+  const remaining = useCountdown(nextEvent?.event_date, nextEvent?.event_time);
   if (!nextEvent) {
     return (
       <Card t={t} className="p-8 text-center">
@@ -347,7 +348,7 @@ function CountdownCard({ nextEvent, t }) {
   return (
     <Card t={t} className="overflow-hidden p-8 text-center relative">
       <p className="mb-1 text-xs font-bold uppercase tracking-[0.2em]" style={{ color: t.primary }}>Next Event</p>
-      <h3 className="mb-4 text-2xl font-extrabold" style={{ color: t.text, fontFamily: "'Baloo 2', sans-serif" }}>{nextEvent.name}</h3>
+      <h3 className="mb-4 text-2xl font-extrabold" style={{ color: t.text, fontFamily: "'Baloo 2', sans-serif" }}>{nextEvent.title}</h3>
       {remaining?.done ? (
         <p className="text-lg font-bold" style={{ color: t.accent }}>Happening now! 🎉</p>
       ) : remaining ? (
@@ -365,10 +366,10 @@ function CountdownCard({ nextEvent, t }) {
           ))}
         </div>
       ) : null}
-      {(nextEvent.venue || nextEvent.time) && (
+      {(nextEvent.location || nextEvent.event_time) && (
         <p className="mt-4 flex items-center justify-center gap-3 text-sm font-semibold" style={{ color: t.textMuted }}>
-          {nextEvent.time && <span className="flex items-center gap-1"><Clock size={14} />{nextEvent.time}</span>}
-          {nextEvent.venue && <span className="flex items-center gap-1"><MapPin size={14} />{nextEvent.venue}</span>}
+          {nextEvent.event_time && <span className="flex items-center gap-1"><Clock size={14} />{nextEvent.event_time}</span>}
+          {nextEvent.location && <span className="flex items-center gap-1"><MapPin size={14} />{nextEvent.location}</span>}
         </p>
       )}
     </Card>
@@ -406,7 +407,7 @@ function Hero({ setView, t }) {
 
 function HomePage({ setView, t, events, announcements, spotlights, achievements }) {
   const nextEvent = useMemo(() => {
-    const upcoming = [...events].filter((e) => e.date >= todayISO()).sort((a,b)=>a.date.localeCompare(b.date));
+    const upcoming = [...events].filter((e) => e.event_date >= todayISO()).sort((a,b)=>a.event_date.localeCompare(b.event_date));
     return upcoming[0] || null;
   }, [events]);
 
@@ -427,7 +428,7 @@ function HomePage({ setView, t, events, announcements, spotlights, achievements 
               {announcements.map((a) => (
                 <li key={a.id} className="rounded-2xl border p-3" style={{ borderColor: t.cardBorder, background: t.inputBg }}>
                   <div className="font-semibold" style={{ color: t.text }}>{a.title}</div>
-                  <div className="text-sm" style={{ color: t.textMuted }}>{a.body}</div>
+                  <div className="text-sm" style={{ color: t.textMuted }}>{a.message}</div>
                 </li>
               ))}
             </ul>
@@ -448,10 +449,10 @@ function HomePage({ setView, t, events, announcements, spotlights, achievements 
               {events.slice(0, 3).map((e) => (
                 <div key={e.id} className="rounded-2xl border p-3" style={{ borderColor: t.cardBorder, background: t.inputBg }}>
                   <div className="flex items-center justify-between gap-2">
-                    <div className="font-semibold" style={{ color: t.text }}>{e.name}</div>
-                    <span className="text-xs font-bold" style={{ color: t.primaryDeep }}>{e.date}</span>
+                    <div className="font-semibold" style={{ color: t.text }}>{e.title}</div>
+                    <span className="text-xs font-bold" style={{ color: t.primaryDeep }}>{e.event_date}</span>
                   </div>
-                  <div className="text-sm" style={{ color: t.textMuted }}>{e.venue || "TBA"}</div>
+                  <div className="text-sm" style={{ color: t.textMuted }}>{e.location || "TBA"}</div>
                 </div>
               ))}
             </div>
@@ -469,8 +470,9 @@ function HomePage({ setView, t, events, announcements, spotlights, achievements 
             <div className="space-y-3">
               {spotlights.map((s) => (
                 <div key={s.id} className="rounded-2xl border p-3" style={{ borderColor: t.cardBorder, background: t.inputBg }}>
-                  <div className="font-semibold" style={{ color: t.text }}>{s.title}</div>
-                  <div className="text-sm" style={{ color: t.textMuted }}>{s.desc}</div>
+                  <div className="font-semibold" style={{ color: t.text }}>{s.student_name}</div>
+                  <div className="text-sm" style={{ color: t.textMuted }}>{s.achievement}</div>
+                  {s.grade && <div className="mt-1 text-xs font-semibold" style={{ color: t.primaryDeep }}>{s.grade}</div>}
                 </div>
               ))}
             </div>
@@ -488,8 +490,13 @@ function HomePage({ setView, t, events, announcements, spotlights, achievements 
             <div className="space-y-3">
               {achievements.map((a) => (
                 <div key={a.id} className="rounded-2xl border p-3" style={{ borderColor: t.cardBorder, background: t.inputBg }}>
-                  <div className="font-semibold" style={{ color: t.text }}>{a.title}</div>
-                  <div className="text-sm" style={{ color: t.textMuted }}>{a.desc}</div>
+                  <div className="font-semibold" style={{ color: t.text }}>{a.student_name || a.title || "Achievement"}</div>
+                  <div className="text-sm" style={{ color: t.textMuted }}>{a.achievement || a.desc || ""}</div>
+                  {(a.grade || a.section || a.category) && (
+                    <div className="mt-1 text-xs font-semibold" style={{ color: t.primaryDeep }}>
+                      {a.grade ? `${a.grade}` : ""}{a.grade && a.section ? " • " : ""}{a.section ? `${a.section}` : ""}{(a.grade || a.section) && a.category ? " • " : ""}{a.category ? `${a.category}` : ""}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -596,6 +603,27 @@ function NewsletterPage({ t, newsletters, onSubmit, initialValues }) {
           <div className="mt-5 flex flex-wrap gap-3">
             <PrimaryButton onClick={() => onSubmit(form)} t={t}>Subscribe</PrimaryButton>
           </div>
+
+          {newsletters.length > 0 && (
+            <div className="mt-8">
+              <h2 className="mb-3 text-xl font-extrabold" style={{ color: t.text, fontFamily: "'Baloo 2', sans-serif" }}>Available Newsletters</h2>
+              <div className="space-y-3">
+                {newsletters.map((item) => (
+                  <a
+                    key={item.id}
+                    href={item.file_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold transition hover:scale-[1.01]"
+                    style={{ borderColor: t.cardBorder, background: t.inputBg, color: t.primaryDeep }}
+                  >
+                    <span>📄</span>
+                    <span>{item.title || "Download Newsletter"}</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </Card>
     </div>
@@ -660,7 +688,7 @@ function AdminLoginPage({ t, onLogin, error }) {
   );
 }
 
-function AdminDashboard({ t, config, setConfig, events, setEvents, announcements, setAnnouncements, spotlights, setSpotlights, achievements, setAchievements, newsletters, setNewsletters, feedback, setFeedback, onLogout }) {
+function AdminDashboard({ t, config, setConfig, events, setEvents, announcements, setAnnouncements, registrations, setRegistrations, spotlights, setSpotlights, achievements, setAchievements, newsletters, setNewsletters, feedback, setFeedback, reloadFeedback, reloadSpotlight, reloadAchievements, onLogout }) {
   const [tab, setTab] = useState("events");
   const [form, setForm] = useState({});
   const [editingId, setEditingId] = useState(null);
@@ -670,102 +698,246 @@ function AdminDashboard({ t, config, setConfig, events, setEvents, announcements
     saveKey(KEYS.config, config);
   }, [config]);
 
-  const saveEvents = useCallback(() => {
-    saveKey(KEYS.events, events);
-  }, [events]);
-
-  const saveAnnouncements = useCallback(() => {
-    saveKey(KEYS.announcements, announcements);
-  }, [announcements]);
-
-  const saveSpotlights = useCallback(() => {
-    saveKey(KEYS.spotlights, spotlights);
-  }, [spotlights]);
-
-  const saveAchievements = useCallback(() => {
-    saveKey(KEYS.achievements, achievements);
-  }, [achievements]);
-
-  const saveNewsletters = useCallback(() => {
-    saveKey(KEYS.newsletters, newsletters);
-  }, [newsletters]);
-
-  const saveFeedback = useCallback(() => {
-    saveKey(KEYS.feedback, feedback);
-  }, [feedback]);
-
   const resetForm = useCallback(() => {
     setForm({});
     setEditingId(null);
   }, []);
+
+  const reloadEvents = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("events")
+      .select("*")
+      .order("event_date", { ascending: true });
+
+    if (error) throw error;
+    setEvents(data ?? []);
+  }, [setEvents]);
+
+  const reloadNewsletters = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("newsletters")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    setNewsletters(data ?? []);
+  }, [setNewsletters]);
 
   const startEdit = useCallback((item) => {
     setForm(item);
     setEditingId(item.id);
   }, []);
 
-  const handleSubmit = useCallback((e) => {
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     const type = tab;
-    if (!form.title && !form.name) return;
+    if (!form.title && !form.name && !form.student_name) return;
 
     if (type === "events") {
-      const payload = { id: editingId || uid(), ...form, date: form.date || todayISO() };
-      if (editingId) {
-        setEvents((prev) => prev.map((x) => x.id === editingId ? payload : x));
-      } else {
-        setEvents((prev) => [payload, ...prev]);
+      try {
+        if (editingId) {
+          const { error } = await supabase
+            .from("events")
+            .update({
+              title: form.title,
+              description: form.description,
+              location: form.location,
+              event_date: form.event_date,
+              event_time: form.event_time,
+            })
+            .eq("id", editingId);
+
+          if (error) throw error;
+        } else {
+          const { error } = await supabase.from("events").insert({
+            title: form.title,
+            description: form.description,
+            location: form.location,
+            event_date: form.event_date,
+            event_time: form.event_time,
+          });
+
+          if (error) throw error;
+        }
+
+        await reloadEvents();
+        resetForm();
+      } catch (error) {
+        console.error("EVENT ERROR:", error);
+        alert(error.message);
       }
-      saveEvents();
-      resetForm();
       return;
     }
 
     if (type === "announcements") {
-      const payload = { id: editingId || uid(), ...form };
-      if (editingId) {
-        setAnnouncements((prev) => prev.map((x) => x.id === editingId ? payload : x));
-      } else {
-        setAnnouncements((prev) => [payload, ...prev]);
+      try {
+        const message = form.body ?? form.message ?? "";
+
+        if (editingId) {
+          const { error } = await supabase
+            .from("announcements")
+            .update({
+              title: form.title,
+              message,
+            })
+            .eq("id", editingId);
+
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from("announcements")
+            .insert({
+              title: form.title,
+              message,
+            });
+
+          if (error) throw error;
+        }
+
+        const { data, error: fetchError } = await supabase
+          .from("announcements")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+        if (fetchError) throw fetchError;
+
+        setAnnouncements(data || []);
+        resetForm();
+      } catch (error) {
+        console.error(error);
+        alert("Failed to save announcement.");
       }
-      saveAnnouncements();
-      resetForm();
       return;
     }
 
     if (type === "spotlights") {
-      const payload = { id: editingId || uid(), ...form };
-      if (editingId) {
-        setSpotlights((prev) => prev.map((x) => x.id === editingId ? payload : x));
-      } else {
-        setSpotlights((prev) => [payload, ...prev]);
+      try {
+        if (editingId) {
+          const { error } = await supabase
+            .from("student_spotlight")
+            .update({
+              student_name: form.student_name,
+              achievement: form.achievement,
+              grade: form.grade,
+            })
+            .eq("id", editingId);
+
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from("student_spotlight")
+            .insert({
+              student_name: form.student_name,
+              achievement: form.achievement,
+              grade: form.grade,
+            });
+
+          if (error) throw error;
+        }
+
+        await reloadSpotlight();
+        resetForm();
+      } catch (error) {
+        console.error("SPOTLIGHT ERROR:", error);
+        alert(error.message);
       }
-      saveSpotlights();
-      resetForm();
       return;
     }
 
     if (type === "achievements") {
-      const payload = { id: editingId || uid(), ...form };
-      if (editingId) {
-        setAchievements((prev) => prev.map((x) => x.id === editingId ? payload : x));
-      } else {
-        setAchievements((prev) => [payload, ...prev]);
+      try {
+        if (editingId) {
+          const { error } = await supabase
+            .from("achievements")
+            .update({
+              student_name: form.student_name,
+              grade: form.grade,
+              section: form.section,
+              achievement: form.achievement,
+              category: form.category,
+              email: form.email,
+            })
+            .eq("id", editingId);
+
+          if (error) throw error;
+        } else {
+          const { error } = await supabase.from("achievements").insert({
+            student_name: form.student_name,
+            grade: form.grade,
+            section: form.section,
+            achievement: form.achievement,
+            category: form.category,
+            email: form.email,
+          });
+
+          if (error) throw error;
+        }
+
+        await reloadAchievements();
+        resetForm();
+      } catch (error) {
+        console.error("ACHIEVEMENTS ERROR:", error);
+        alert(error.message);
       }
-      saveAchievements();
-      resetForm();
       return;
     }
 
     if (type === "newsletters") {
-      const payload = { id: editingId || uid(), ...form };
-      if (editingId) {
-        setNewsletters((prev) => prev.map((x) => x.id === editingId ? payload : x));
-      } else {
-        setNewsletters((prev) => [payload, ...prev]);
+      try {
+        const title = form.title?.trim();
+        if (!title) {
+          alert("Please enter a newsletter title.");
+          return;
+        }
+
+        let fileUrl = null;
+        if (form.file) {
+          const filename = `${Date.now()}-${form.file.name}`;
+          const { error: uploadError } = await supabase.storage
+            .from("newsletters")
+            .upload(filename, form.file);
+
+          if (uploadError) throw uploadError;
+
+          const { data } = supabase.storage
+            .from("newsletters")
+            .getPublicUrl(filename);
+
+          fileUrl = data.publicUrl;
+        }
+
+        if (editingId) {
+          const payload = { title };
+          if (fileUrl) payload.file_url = fileUrl;
+
+          const { error } = await supabase
+            .from("newsletters")
+            .update(payload)
+            .eq("id", editingId);
+
+          if (error) throw error;
+        } else {
+          if (!fileUrl) {
+            alert("Please select a PDF file.");
+            return;
+          }
+
+          const { error } = await supabase
+            .from("newsletters")
+            .insert({
+              title,
+              file_url: fileUrl,
+            });
+
+          if (error) throw error;
+        }
+
+        await reloadNewsletters();
+        resetForm();
+      } catch (error) {
+        console.error("NEWSLETTER ERROR:", error);
+        alert(error.message || "Failed to save newsletter.");
       }
-      saveNewsletters();
-      resetForm();
       return;
     }
 
@@ -776,16 +948,25 @@ function AdminDashboard({ t, config, setConfig, events, setEvents, announcements
       } else {
         setFeedback((prev) => [payload, ...prev]);
       }
-      saveFeedback();
       resetForm();
       return;
     }
-  }, [tab, form, editingId, resetForm, saveEvents, saveAnnouncements, saveSpotlights, saveAchievements, saveNewsletters, saveFeedback, setEvents, setAnnouncements, setSpotlights, setAchievements, setNewsletters, setFeedback]);
+  }, [tab, form, editingId, resetForm, reloadEvents, reloadNewsletters, reloadSpotlight, reloadAchievements]);
 
   const filtered = useMemo(() => {
     const data = tab === "events" ? events : tab === "announcements" ? announcements : tab === "spotlights" ? spotlights : tab === "achievements" ? achievements : tab === "newsletters" ? newsletters : feedback;
     return data.filter((item) => JSON.stringify(item).toLowerCase().includes(search.toLowerCase()));
   }, [tab, events, announcements, spotlights, achievements, newsletters, feedback, search]);
+
+  const reloadRegistrations = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("registrations")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    setRegistrations(data ?? []);
+  }, [setRegistrations]);
 
   return (
     <div className="mx-auto max-w-7xl px-5 py-8 pt-24">
@@ -829,20 +1010,20 @@ function AdminDashboard({ t, config, setConfig, events, setEvents, announcements
               <form onSubmit={handleSubmit} className="space-y-4">
                 {tab === "events" && (
                   <>
-                    <Field label="Event Name" required>
-                      <input className={inputClass} style={inputStyle(t)} value={form.name || ""} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Event title" />
-                    </Field>
-                    <Field label="Date" required>
-                      <input type="date" className={inputClass} style={inputStyle(t)} value={form.date || ""} onChange={(e) => setForm({ ...form, date: e.target.value })} />
-                    </Field>
-                    <Field label="Time">
-                      <input className={inputClass} style={inputStyle(t)} value={form.time || ""} onChange={(e) => setForm({ ...form, time: e.target.value })} placeholder="e.g. 10:00 AM" />
-                    </Field>
-                    <Field label="Venue">
-                      <input className={inputClass} style={inputStyle(t)} value={form.venue || ""} onChange={(e) => setForm({ ...form, venue: e.target.value })} placeholder="Location" />
+                    <Field label="Title" required>
+                      <input className={inputClass} style={inputStyle(t)} value={form.title || ""} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Event title" />
                     </Field>
                     <Field label="Description">
-                      <textarea className={inputClass} rows={3} style={inputStyle(t)} value={form.desc || ""} onChange={(e) => setForm({ ...form, desc: e.target.value })} placeholder="Short description" />
+                      <textarea className={inputClass} rows={3} style={inputStyle(t)} value={form.description || ""} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Short description" />
+                    </Field>
+                    <Field label="Location">
+                      <input className={inputClass} style={inputStyle(t)} value={form.location || ""} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="Location" />
+                    </Field>
+                    <Field label="Date" required>
+                      <input type="date" className={inputClass} style={inputStyle(t)} value={form.event_date || ""} onChange={(e) => setForm({ ...form, event_date: e.target.value })} />
+                    </Field>
+                    <Field label="Time">
+                      <input className={inputClass} style={inputStyle(t)} value={form.event_time || ""} onChange={(e) => setForm({ ...form, event_time: e.target.value })} placeholder="e.g. 10:00 AM" />
                     </Field>
                   </>
                 )}
@@ -860,36 +1041,54 @@ function AdminDashboard({ t, config, setConfig, events, setEvents, announcements
 
                 {tab === "spotlights" && (
                   <>
-                    <Field label="Title" required>
-                      <input className={inputClass} style={inputStyle(t)} value={form.title || ""} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Spotlight title" />
+                    <Field label="Student Name" required>
+                      <input className={inputClass} style={inputStyle(t)} value={form.student_name || ""} onChange={(e) => setForm({ ...form, student_name: e.target.value })} placeholder="Student name" />
                     </Field>
-                    <Field label="Description" required>
-                      <textarea className={inputClass} rows={4} style={inputStyle(t)} value={form.desc || ""} onChange={(e) => setForm({ ...form, desc: e.target.value })} placeholder="Spotlight description" />
+                    <Field label="Achievement" required>
+                      <textarea className={inputClass} rows={4} style={inputStyle(t)} value={form.achievement || ""} onChange={(e) => setForm({ ...form, achievement: e.target.value })} placeholder="Achievement details" />
+                    </Field>
+                    <Field label="Grade">
+                      <input className={inputClass} style={inputStyle(t)} value={form.grade || ""} onChange={(e) => setForm({ ...form, grade: e.target.value })} placeholder="e.g. 2nd Year" />
                     </Field>
                   </>
                 )}
 
                 {tab === "achievements" && (
                   <>
-                    <Field label="Title" required>
-                      <input className={inputClass} style={inputStyle(t)} value={form.title || ""} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Achievement title" />
+                    <Field label="Student Name" required>
+                      <input className={inputClass} style={inputStyle(t)} value={form.student_name || ""} onChange={(e) => setForm({ ...form, student_name: e.target.value })} placeholder="Student name" />
                     </Field>
-                    <Field label="Description" required>
-                      <textarea className={inputClass} rows={4} style={inputStyle(t)} value={form.desc || ""} onChange={(e) => setForm({ ...form, desc: e.target.value })} placeholder="Achievement description" />
+                    <Field label="Achievement" required>
+                      <textarea className={inputClass} rows={4} style={inputStyle(t)} value={form.achievement || ""} onChange={(e) => setForm({ ...form, achievement: e.target.value })} placeholder="Achievement details" />
+                    </Field>
+                    <Field label="Grade">
+                      <input className={inputClass} style={inputStyle(t)} value={form.grade || ""} onChange={(e) => setForm({ ...form, grade: e.target.value })} placeholder="e.g. 2nd Year" />
+                    </Field>
+                    <Field label="Section">
+                      <input className={inputClass} style={inputStyle(t)} value={form.section || ""} onChange={(e) => setForm({ ...form, section: e.target.value })} placeholder="e.g. A" />
+                    </Field>
+                    <Field label="Category">
+                      <input className={inputClass} style={inputStyle(t)} value={form.category || ""} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="e.g. Sports" />
+                    </Field>
+                    <Field label="Email">
+                      <input className={inputClass} style={inputStyle(t)} value={form.email || ""} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="student@email.com" />
                     </Field>
                   </>
                 )}
 
                 {tab === "newsletters" && (
                   <>
-                    <Field label="Name" required>
-                      <input className={inputClass} style={inputStyle(t)} value={form.name || ""} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Subscriber name" />
+                    <Field label="Title" required>
+                      <input className={inputClass} style={inputStyle(t)} value={form.title || ""} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Newsletter title" />
                     </Field>
-                    <Field label="Email" required>
-                      <input className={inputClass} style={inputStyle(t)} value={form.email || ""} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="Subscriber email" />
-                    </Field>
-                    <Field label="Message">
-                      <textarea className={inputClass} rows={3} style={inputStyle(t)} value={form.message || ""} onChange={(e) => setForm({ ...form, message: e.target.value })} placeholder="Subscriber message" />
+                    <Field label="PDF File" required>
+                      <input
+                        type="file"
+                        accept="application/pdf"
+                        className={inputClass}
+                        style={inputStyle(t)}
+                        onChange={(e) => setForm({ ...form, file: e.target.files?.[0] || null })}
+                      />
                     </Field>
                   </>
                 )}
@@ -930,25 +1129,92 @@ function AdminDashboard({ t, config, setConfig, events, setEvents, announcements
                       </div>
                       <div className="flex gap-2">
                         <IconBtn icon={Pencil} onClick={() => startEdit(item)} t={t} title="Edit" />
-                        <IconBtn icon={Trash2} onClick={() => {
+                        <IconBtn icon={Trash2} onClick={async () => {
                           if (tab === "events") {
-                            setEvents((prev) => prev.filter((x) => x.id !== item.id));
-                            saveEvents();
+                            try {
+                              const { error } = await supabase
+                                .from("events")
+                                .delete()
+                                .eq("id", item.id);
+
+                              if (error) throw error;
+                              await reloadEvents();
+                            } catch (error) {
+                              console.error(error);
+                              alert("Failed to delete event.");
+                            }
                           } else if (tab === "announcements") {
-                            setAnnouncements((prev) => prev.filter((x) => x.id !== item.id));
-                            saveAnnouncements();
+                            try {
+                              const { error } = await supabase
+                                .from("announcements")
+                                .delete()
+                                .eq("id", item.id);
+
+                              if (error) throw error;
+
+                              const { data, error: fetchError } = await supabase
+                                .from("announcements")
+                                .select("*")
+                                .order("created_at", { ascending: false });
+
+                              if (fetchError) throw fetchError;
+                              setAnnouncements(data || []);
+                            } catch (error) {
+                              console.error(error);
+                              alert("Failed to delete announcement.");
+                            }
                           } else if (tab === "spotlights") {
-                            setSpotlights((prev) => prev.filter((x) => x.id !== item.id));
-                            saveSpotlights();
+                            try {
+                              const { error } = await supabase
+                                .from("student_spotlight")
+                                .delete()
+                                .eq("id", item.id);
+
+                              if (error) throw error;
+                              await reloadSpotlight();
+                            } catch (error) {
+                              console.error(error);
+                              alert("Failed to delete spotlight.");
+                            }
                           } else if (tab === "achievements") {
-                            setAchievements((prev) => prev.filter((x) => x.id !== item.id));
-                            saveAchievements();
+                            try {
+                              const { error } = await supabase
+                                .from("achievements")
+                                .delete()
+                                .eq("id", item.id);
+
+                              if (error) throw error;
+                              await reloadAchievements();
+                            } catch (error) {
+                              console.error(error);
+                              alert("Failed to delete achievement.");
+                            }
                           } else if (tab === "newsletters") {
-                            setNewsletters((prev) => prev.filter((x) => x.id !== item.id));
-                            saveNewsletters();
+                            try {
+                              const { error } = await supabase
+                                .from("newsletters")
+                                .delete()
+                                .eq("id", item.id);
+
+                              if (error) throw error;
+                              await reloadNewsletters();
+                            } catch (error) {
+                              console.error(error);
+                              alert("Failed to delete newsletter.");
+                            }
                           } else if (tab === "feedback") {
-                            setFeedback((prev) => prev.filter((x) => x.id !== item.id));
-                            saveFeedback();
+                            try {
+                              const { error } = await supabase
+                                .from("feedback")
+                                .delete()
+                                .eq("id", item.id);
+
+                              if (error) throw error;
+                              await reloadFeedback();
+                            } catch (error) {
+                              console.error(error);
+                              alert("Failed to delete feedback.");
+                            }
                           }
                         }} t={t} title="Delete" danger />
                       </div>
@@ -958,6 +1224,41 @@ function AdminDashboard({ t, config, setConfig, events, setEvents, announcements
               </div>
             </Card>
           </div>
+
+          <Card t={t} className="mt-6 p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-extrabold" style={{ color: t.text, fontFamily: "'Baloo 2', sans-serif" }}>Registrations</h3>
+              <span className="rounded-full px-3 py-1 text-xs font-bold" style={{ background: t.primary + "18", color: t.primaryDeep }}>{registrations.length}</span>
+            </div>
+            <div className="space-y-3">
+              {registrations.length === 0 ? (
+                <p className="text-sm" style={{ color: t.textMuted }}>No registrations yet.</p>
+              ) : registrations.map((item) => (
+                <div key={item.id} className="rounded-2xl border p-3" style={{ borderColor: t.cardBorder, background: t.inputBg }}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="font-semibold" style={{ color: t.text }}>{item.name || "Registration"}</div>
+                      <div className="text-sm" style={{ color: t.textMuted }}>{item.event || item.email || ""}</div>
+                    </div>
+                    <IconBtn icon={Trash2} onClick={async () => {
+                      try {
+                        const { error } = await supabase
+                          .from("registrations")
+                          .delete()
+                          .eq("id", item.id);
+
+                        if (error) throw error;
+                        await reloadRegistrations();
+                      } catch (error) {
+                        console.error(error);
+                        alert("Failed to delete registration.");
+                      }
+                    }} t={t} title="Delete" danger />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
         </div>
       </Card>
     </div>
@@ -1013,57 +1314,137 @@ export default function App() {
   const [adminError, setAdminError] = useState("");
   const [events, setEvents] = useState(seedEvents);
   const [announcements, setAnnouncements] = useState(seedAnnouncements);
+  const [registrations, setRegistrations] = useState([]);
   const [spotlights, setSpotlights] = useState(seedSpotlights);
   const [achievements, setAchievements] = useState(seedAchievements);
   const [newsletters, setNewsletters] = useState(seedNewsletters);
   const [feedback, setFeedback] = useState([]);
   const [config, setConfig] = useState(seedConfig);
 
+  const reloadSpotlight = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("student_spotlight")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    setSpotlights(data ?? []);
+  }, [setSpotlights]);
+
+  const reloadAchievements = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("achievements")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    setAchievements(data ?? []);
+  }, [setAchievements]);
+
   useEffect(() => {
     async function hydrate() {
-      const [e, a, s, ach, n, f, c] = await Promise.all([
-        loadKey(KEYS.events, seedEvents),
-        loadKey(KEYS.announcements, seedAnnouncements),
-        loadKey(KEYS.spotlights, seedSpotlights),
-        loadKey(KEYS.achievements, seedAchievements),
-        loadKey(KEYS.newsletters, seedNewsletters),
-        loadKey(KEYS.feedback, []),
+      const [{ data: eventData }, a, r, { data: newsletterData }, f, c] = await Promise.all([
+        supabase.from("events").select("*").order("event_date", { ascending: true }),
+        supabase.from("announcements").select("*").order("created_at", { ascending: false }),
+        supabase.from("registrations").select("*").order("created_at", { ascending: false }),
+        supabase.from("newsletters").select("*").order("created_at", { ascending: false }),
+        supabase.from("feedback").select("*").order("created_at", { ascending: false }),
         loadKey(KEYS.config, seedConfig),
       ]);
-      setEvents(e || []);
-      setAnnouncements(a || []);
-      setSpotlights(s || []);
-      setAchievements(ach || []);
-      setNewsletters(n || []);
-      setFeedback(f || []);
+      setEvents(eventData ?? []);
+      setAnnouncements(a?.data ?? seedAnnouncements);
+      setRegistrations(r?.data ?? []);
+      setNewsletters(newsletterData ?? []);
+      setFeedback(f?.data ?? []);
       setConfig(c || seedConfig);
+      await reloadSpotlight();
     }
     hydrate();
-  }, []);
+  }, [reloadSpotlight]);
+
+  useEffect(() => {
+    reloadAchievements();
+  }, [reloadAchievements]);
 
   const handleRegister = useCallback(async (values) => {
-    const payload = { id: uid(), ...values, createdAt: new Date().toISOString() };
-    const next = [payload, ...feedback];
-    setFeedback(next);
-    saveKey(KEYS.feedback, next);
-    alert("Registration received! We'll contact you soon.");
-  }, [feedback]);
+    try {
+      const { error } = await supabase.from("registrations").insert({
+        name: values.name,
+        email: values.email,
+        phone: values.phone,
+        grade: values.year,
+        section: values.branch,
+        event: values.event,
+        message: values.message,
+      });
+
+      if (error) {
+        console.error(error);
+        alert(error.message);
+        return;
+      }
+
+      const { data, error: reloadError } = await supabase
+        .from("registrations")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (reloadError) throw reloadError;
+      setRegistrations(data ?? []);
+      alert("Registration received! We'll contact you soon.");
+    } catch (error) {
+      console.error("REGISTRATION ERROR:", error);
+      alert(error.message || "Failed to submit registration.");
+    }
+  }, []);
 
   const handleNewsletter = useCallback(async (values) => {
-    const payload = { id: uid(), ...values, createdAt: new Date().toISOString() };
-    const next = [payload, ...newsletters];
-    setNewsletters(next);
-    saveKey(KEYS.newsletters, next);
     alert("Subscribed! We'll keep you updated.");
-  }, [newsletters]);
+  }, []);
+
+  const reloadFeedback = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("feedback")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    setFeedback(data ?? []);
+  }, [setFeedback]);
 
   const handleFeedback = useCallback(async (values) => {
-    const payload = { id: uid(), ...values, createdAt: new Date().toISOString() };
-    const next = [payload, ...feedback];
-    setFeedback(next);
-    saveKey(KEYS.feedback, next);
-    alert("Thanks for your feedback!");
-  }, [feedback]);
+    try {
+      const { error } = await supabase.from("feedback").insert({
+        name: values.name,
+        email: values.email,
+        message: values.message,
+      });
+
+      if (error) {
+        console.error(error);
+        alert(error.message);
+        return;
+      }
+
+      await reloadFeedback();
+      alert("Thanks for your feedback!");
+    } catch (error) {
+      console.error("FEEDBACK ERROR:", error);
+      alert(error.message || "Failed to submit feedback.");
+    }
+  }, [reloadFeedback]);
 
   const handleAdminLogin = useCallback(async (password) => {
     if (password === config.password) {
@@ -1090,7 +1471,7 @@ export default function App() {
       {view === "about" && <AboutPage t={t} />}
       {view === "achievements" && <div className="mx-auto max-w-5xl px-5 py-8 pt-24"><Card t={t} className="p-8"><h1 className="text-3xl font-extrabold" style={{ fontFamily: "'Baloo 2', sans-serif" }}>Achievements</h1><div className="mt-4 space-y-3">{achievements.map((a) => <div key={a.id} className="rounded-2xl border p-3" style={{ borderColor: t.cardBorder, background: t.inputBg }}><div className="font-semibold" style={{ color: t.text }}>{a.title}</div><div className="text-sm" style={{ color: t.textMuted }}>{a.desc}</div></div>)}</div></Card></div>}
       {view === "adminLogin" && <AdminLoginPage t={t} onLogin={handleAdminLogin} error={adminError} />}
-      {view === "admin" && isAdmin && <AdminDashboard t={t} config={config} setConfig={setConfig} events={events} setEvents={setEvents} announcements={announcements} setAnnouncements={setAnnouncements} spotlights={spotlights} setSpotlights={setSpotlights} achievements={achievements} setAchievements={setAchievements} newsletters={newsletters} setNewsletters={setNewsletters} feedback={feedback} setFeedback={setFeedback} onLogout={handleAdminLogout} />}
+      {view === "admin" && isAdmin && <AdminDashboard t={t} config={config} setConfig={setConfig} events={events} setEvents={setEvents} announcements={announcements} setAnnouncements={setAnnouncements} registrations={registrations} setRegistrations={setRegistrations} spotlights={spotlights} setSpotlights={setSpotlights} achievements={achievements} setAchievements={setAchievements} newsletters={newsletters} setNewsletters={setNewsletters} feedback={feedback} setFeedback={setFeedback} reloadFeedback={reloadFeedback} reloadSpotlight={reloadSpotlight} reloadAchievements={reloadAchievements} onLogout={handleAdminLogout} />}
     </div>
   );
 }
